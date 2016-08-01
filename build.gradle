@@ -1,0 +1,92 @@
+import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
+
+buildscript {
+	ext {
+		springBootVersion = '1.4.0.RELEASE'
+		gradleDockerPluginVersion = '3.0.1'
+	}
+	repositories {
+		mavenCentral()
+	}
+	dependencies {
+		classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
+		classpath "com.bmuschko:gradle-docker-plugin:${gradleDockerPluginVersion}"
+	}
+}
+
+apply plugin: 'groovy'
+apply plugin: 'idea'
+apply plugin: 'eclipse'
+apply plugin: 'spring-boot'
+apply plugin: 'com.bmuschko.docker-remote-api'
+
+version = '0.0.1-SNAPSHOT'
+
+jar {
+	baseName = 'spring-boot-gradle-docker'
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	compile 'org.springframework.boot:spring-boot-starter'
+	compile 'org.codehaus.groovy:groovy'
+	testCompile 'org.springframework.boot:spring-boot-starter-test'
+}
+
+eclipse {
+	classpath {
+		 containers.remove('org.eclipse.jdt.launching.JRE_CONTAINER')
+		 containers 'org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8'
+	}
+}
+
+//update project version in Spring Boot banner
+processResources {
+	inputs.property "projectVersion", version.toString()
+	filter org.apache.tools.ant.filters.ReplaceTokens, tokens: ['version': version.toString()]
+}
+
+docker {
+	if (System.env.DOCKER_HOST) {
+		url = "$System.env.DOCKER_HOST".replace("tcp", "https")
+		if (System.env.DOCKER_CERT_PATH) {
+			certPath = new File(System.env.DOCKER_CERT_PATH)
+		}
+	} else {
+		url = 'unix:///var/run/docker.sock'
+	}
+}
+
+//unpack Spring Boot Fat Jar and preserve file modification date
+task unpackFatJar(type: Copy, dependsOn: 'assemble') {
+    def dockerWorkingDir = file("${buildDir}/docker")
+    
+    from zipTree(jar.archivePath)
+    into dockerWorkingDir
+    includeEmptyDirs = false
+
+	// hack to preserve modification date - required for Docker cache
+    def copyDetails = []
+    eachFile { copyDetails << it }
+    doLast { restoreLastModifiedDate(copyDetails, dockerWorkingDir) }
+}
+
+task buildDockerImage(type: DockerBuildImage, dependsOn: "unpackFatJar") {
+	inputDir = project.projectDir
+	tag = "orzeh/${project.name}:${project.version}"
+}
+
+def restoreLastModifiedDate(List copyDetails, File dir) {
+    copyDetails.each { FileCopyDetails details ->
+        def target = new File(dir, details.path)
+        if(target.exists()) {
+            target.setLastModified(details.lastModified)
+        }
+    }
+}
