@@ -1,5 +1,5 @@
 # Introduction
-Sample project demonstrating how to build Docker image for Spring Boot application using gradle-docker-plugin.
+Sample project demonstrating how to build Docker image for [Spring Boot](http://projects.spring.io/spring-boot/) application using [gradle-docker-plugin](https://github.com/bmuschko/gradle-docker-plugin).
 
 ## Building
 To build Docker image containing sample Spring Boot application run following command in terminal:
